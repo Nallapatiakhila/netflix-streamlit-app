@@ -1,61 +1,75 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
 import seaborn as sns
+import matplotlib.pyplot as plt
 
-# Set page config
-st.set_page_config(page_title="Netflix Titles Explorer", layout="wide")
+st.set_page_config(page_title="Netflix Data Explorer", layout="wide")
 
 # Title
-st.title("🎬 Netflix Titles Data Explorer")
+st.title("📺 Netflix Titles Data Explorer")
 
 # Load data
 @st.cache_data
 def load_data():
-    file_path = "netflix_titles.csv"  # ✅ Correct filename here
-    return pd.read_csv(file_path)
+    df = pd.read_csv("netflix_titles.csv")
+
+    # Drop rows missing crucial data
+    df.dropna(subset=["type", "title"], inplace=True)
+
+    # Safely convert 'date_added' to datetime
+    df['date_added'] = pd.to_datetime(df['date_added'], errors='coerce')
+
+    return df
 
 df = load_data()
 
 # Show raw data
 if st.checkbox("Show raw data"):
-    st.subheader("Raw Data")
     st.write(df)
 
-# Basic info
-st.subheader("Dataset Info")
-st.write(f"🔢 Rows: {df.shape[0]}, 🧬 Columns: {df.shape[1]}")
-st.write("📌 Column Names:", list(df.columns))
+# Sidebar filters
+st.sidebar.header("Filter Data")
+type_filter = st.sidebar.multiselect("Select Type", options=df['type'].unique(), default=df['type'].unique())
+country_filter = st.sidebar.multiselect("Select Country", options=df['country'].dropna().unique(), default=None)
 
-# Summary statistics
-if st.checkbox("Show summary statistics (numeric only)"):
-    st.subheader("Summary Statistics")
-    st.write(df.describe())
+# Apply filters
+filtered_df = df[df['type'].isin(type_filter)]
+if country_filter:
+    filtered_df = filtered_df[filtered_df['country'].isin(country_filter)]
 
-# Column selection
-numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
+st.subheader("Filtered Data Preview")
+st.dataframe(filtered_df)
 
-if numeric_cols:
-    st.subheader("📈 Plotting")
-    col1 = st.selectbox("Select X-axis (numeric)", numeric_cols)
-    col2 = st.selectbox("Select Y-axis (numeric)", numeric_cols)
+# Plotting section
+st.subheader("Visualize Data")
 
-    plot_type = st.radio("Choose plot type:", ["Scatter", "Line", "Histogram", "Boxplot"])
+numeric_cols = filtered_df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+date_col = 'date_added' if 'date_added' in filtered_df.columns else None
 
-    fig, ax = plt.subplots()
-    if plot_type == "Scatter":
-        sns.scatterplot(data=df, x=col1, y=col2, ax=ax)
-    elif plot_type == "Line":
-        sns.lineplot(data=df, x=col1, y=col2, ax=ax)
-    elif plot_type == "Histogram":
-        sns.histplot(data=df, x=col1, bins=30, kde=True, ax=ax)
-    elif plot_type == "Boxplot":
-        sns.boxplot(data=df, x=col1, y=col2, ax=ax)
+plot_type = st.selectbox("Select Plot Type", ["Bar Chart", "Histogram", "Boxplot"])
+col1 = st.selectbox("X-axis", options=filtered_df.columns)
+col2 = st.selectbox("Y-axis (for Boxplot)", options=numeric_cols + ["None"], index=len(numeric_cols))
+
+# Create plot
+if plot_type and col1:
+    fig, ax = plt.subplots(figsize=(10, 5))
+
+    if plot_type == "Bar Chart":
+        filtered_df[col1].value_counts().nlargest(20).plot(kind='bar', ax=ax)
+        ax.set_ylabel("Count")
+
+    elif plot_type == "Histogram" and col1 in numeric_cols:
+        sns.histplot(data=filtered_df, x=col1, bins=30, kde=True, ax=ax)
+
+    elif plot_type == "Boxplot" and col2 != "None":
+        sns.boxplot(data=filtered_df, x=col1, y=col2, ax=ax)
 
     st.pyplot(fig)
 else:
-    st.warning("No numeric columns available for plotting.")
+    st.warning("Please select valid columns for the plot.")
 
 # Footer
 st.markdown("---")
-st.markdown("👨‍💻 Built with Streamlit")
+st.markdown("❤️ Built by Akhila")
+
+
