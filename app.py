@@ -1,54 +1,61 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Set page config
+st.set_page_config(page_title="Netflix Titles Explorer", layout="wide")
+
+# Title
+st.title("🎬 Netflix Titles Data Explorer")
 
 # Load data
 @st.cache_data
 def load_data():
-    df = pd.read_csv("netflix_titles.csv")
-    df['date_added'] = pd.to_datetime(df['date_added'])
-    df['year_added'] = df['date_added'].dt.year
-    return df
+    file_path = "netflix_titles.csv"  # ✅ Correct filename here
+    return pd.read_csv(file_path)
 
 df = load_data()
 
-# Title
-st.title("🎬 Netflix Movies & TV Shows Dashboard")
+# Show raw data
+if st.checkbox("Show raw data"):
+    st.subheader("Raw Data")
+    st.write(df)
 
-# Sidebar filters
-st.sidebar.header("Filter")
-selected_type = st.sidebar.multiselect("Type", df['type'].unique(), default=df['type'].unique())
-selected_country = st.sidebar.multiselect("Country", df['country'].dropna().unique()[:10], default=None)
-selected_year = st.sidebar.slider("Year Added", 2008, 2021, (2015, 2020))
+# Basic info
+st.subheader("Dataset Info")
+st.write(f"🔢 Rows: {df.shape[0]}, 🧬 Columns: {df.shape[1]}")
+st.write("📌 Column Names:", list(df.columns))
 
-# Apply filters
-filtered_df = df[
-    (df['type'].isin(selected_type)) &
-    (df['year_added'].between(selected_year[0], selected_year[1]))
-]
+# Summary statistics
+if st.checkbox("Show summary statistics (numeric only)"):
+    st.subheader("Summary Statistics")
+    st.write(df.describe())
 
-if selected_country:
-    filtered_df = filtered_df[filtered_df['country'].isin(selected_country)]
+# Column selection
+numeric_cols = df.select_dtypes(include=["number"]).columns.tolist()
 
-# Show data
-st.subheader("📄 Filtered Results")
-st.write(f"Total entries: {filtered_df.shape[0]}")
-st.dataframe(filtered_df[['title', 'type', 'country', 'release_year', 'rating']])
+if numeric_cols:
+    st.subheader("📈 Plotting")
+    col1 = st.selectbox("Select X-axis (numeric)", numeric_cols)
+    col2 = st.selectbox("Select Y-axis (numeric)", numeric_cols)
 
-# Plot: Shows per year
-st.subheader("📈 Shows Added per Year")
-count_by_year = filtered_df['year_added'].value_counts().sort_index()
-st.bar_chart(count_by_year)
+    plot_type = st.radio("Choose plot type:", ["Scatter", "Line", "Histogram", "Boxplot"])
 
-# Plot: Top 10 Genres
-st.subheader("🎭 Top 10 Genres")
-genre_data = df['listed_in'].dropna().str.split(', ', expand=True).stack().value_counts().head(10)
-st.plotly_chart(px.bar(genre_data, orientation='h', title="Top Genres"))
+    fig, ax = plt.subplots()
+    if plot_type == "Scatter":
+        sns.scatterplot(data=df, x=col1, y=col2, ax=ax)
+    elif plot_type == "Line":
+        sns.lineplot(data=df, x=col1, y=col2, ax=ax)
+    elif plot_type == "Histogram":
+        sns.histplot(data=df, x=col1, bins=30, kde=True, ax=ax)
+    elif plot_type == "Boxplot":
+        sns.boxplot(data=df, x=col1, y=col2, ax=ax)
 
-# Plot: Type Distribution
-st.subheader("📊 Type Distribution")
-st.plotly_chart(px.pie(df, names='type', title="Movies vs TV Shows"))
+    st.pyplot(fig)
+else:
+    st.warning("No numeric columns available for plotting.")
 
 # Footer
 st.markdown("---")
-st.markdown("Built with ❤️ using Streamlit")
+st.markdown("👨‍💻 Built with Streamlit")
